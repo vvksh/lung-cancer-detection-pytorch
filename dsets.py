@@ -1,7 +1,6 @@
 import csv, copy
 import functools
 import glob
-import logging
 import os
 from collections import namedtuple
 import SimpleITK as sitk
@@ -11,8 +10,10 @@ from torch.utils.data import Dataset
 
 from util.utils import xyz2irc, irc2xyz, XyzTuple, IrcTuple
 from util.disk import getCache
-
+import log
 raw_cache = getCache('luna_raw')
+
+logger = log.setup_custom_logger(__name__)
 
 CandidateInfoTuple = namedtuple(
     'CandidateInfoTuple',
@@ -142,7 +143,7 @@ class LunaDataset(Dataset):
             del self.candidateInfo_list[::val_stride]
             assert self.candidateInfo_list
 
-        logging.info("{!r}: {} {} samples".format(
+        logger.info("{!r}: {} {} samples".format(
             self,
             len(self.candidateInfo_list),
             "validation" if isValSet_bool else "training",
@@ -152,6 +153,7 @@ class LunaDataset(Dataset):
         return len(self.candidateInfo_list)
 
     def __getitem__(self, ndx):
+        # logger.info(f"Getting item {ndx} from dataset ")
         candidateInfo_tup = self.candidateInfo_list[ndx]
         width_irc = (32, 48, 48)
 

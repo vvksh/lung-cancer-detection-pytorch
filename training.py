@@ -4,6 +4,7 @@ from datetime import datetime
 
 from torch.utils.data import DataLoader
 
+import log
 from dsets import LunaDataset
 import torch
 from torch.optim import SGD
@@ -12,7 +13,7 @@ from util.utils import enumerate_with_estimate
 from model import LunaModel
 
 
-log = logging.getLogger(__name__)
+logger = log.setup_custom_logger(__name__)
 
 METRICS_LABEL_NDX=0
 METRICS_PRED_NDX=1
@@ -27,7 +28,7 @@ class LunaTrainingApp:
         parser = argparse.ArgumentParser()
         parser.add_argument('--num-workers',
                             help='Number of worker processes for data loading',
-                            default=8,
+                            default=4,
                             type=int)
 
         parser.add_argument('--batch-size',
@@ -51,12 +52,12 @@ class LunaTrainingApp:
 
         self.model = self.init_model()
         self.optimizer = self.init_optimizer()
-
+        self.total_training_samples_count = 0
 
     def init_model(self):
         model = LunaModel()
         if self.use_cuda:
-            log.info(f"Using cuda; {torch.cuda.device_count()}")
+            logger.info(f"Using cuda; {torch.cuda.device_count()}")
             if torch.cuda.device_count() > 1:
                 model = torch.nn.DataParallel(model)
             model = model.to(self.device)
@@ -66,6 +67,8 @@ class LunaTrainingApp:
         return SGD(self.model.parameters(), lr=0.001, momentum=0.99)
 
     def init_dataloader(self, is_validation=False):
+        logger.info(f"Initializing dataloader with batch_size {self.cli_args.batch_size},"
+                 f" validation? :{is_validation}")
         train_ds = LunaDataset(
             val_stride=10,
             isValSet_bool=is_validation
@@ -75,17 +78,18 @@ class LunaTrainingApp:
         if self.use_cuda:
             batch_size *= torch.cuda.device_count()
 
-        train_dl = DataLoader(
+        dataloader = DataLoader(
             train_ds,
             batch_size=batch_size,
             num_workers=self.cli_args.num_workers,
             pin_memory=self.use_cuda
         )
 
-        return train_dl
+        return dataloader
 
     def do_training(self, epoch_ndx, train_dl):
-        self.model.train()
+
+        self.model.train() # just sets to train mode, doesnt do the actual training
 
         # initialize an empty metrics array
         trn_metrics_g = torch.zeros(
@@ -102,6 +106,8 @@ class LunaTrainingApp:
         )
 
         for batch_ndx, batch_tup in batch_iter:
+            if batch_ndx % 100 == 0:
+                logger.info(f"Running on batch_ndx {batch_ndx}")
             self.optimizer.zero_grad()
 
             loss_var = self.compute_batch_loss(
@@ -184,7 +190,7 @@ class LunaTrainingApp:
         metrics_dict['correct/neg'] = neg_correct/ np.float32(neg_count) * 100
         metrics_dict['correct/pos'] = pos_correct / np.float32(pos_count) * 100
 
-        log.info(
+        logger.info(
             ("E{} {:8} {loss/all:.4f} loss, "
              + "{correct/all:-5.1f}% correct, "
              ).format(
@@ -193,7 +199,7 @@ class LunaTrainingApp:
                 **metrics_dict,
             )
         )
-        log.info(
+        logger.info(
             ("E{} {:8} {loss/neg:.4f} loss, "
              + "{correct/neg:-5.1f}% correct ({neg_correct:} of {neg_count:})"
              ).format(
@@ -204,7 +210,7 @@ class LunaTrainingApp:
                 **metrics_dict,
             )
         )
-        log.info(
+        logger.info(
             ("E{} {:8} {loss/pos:.4f} loss, "
              + "{correct/pos:-5.1f}% correct ({pos_correct:} of {pos_count:})"
              ).format(
@@ -250,14 +256,15 @@ class LunaTrainingApp:
 
 
     def main(self):
-            log.info(f"Starting {self.__class__.__name__}, {self.cli_args}")
-            train_dl = self.init_dataloader()
-            val_dl = self.init_dataloader(is_validation=True)
-            for epoch_ndx in range(self.cli_args.epochs + 1):
-                trn_metrics_t = self.do_training(epoch_ndx=epoch_ndx, train_dl=train_dl)
-                self.log_metrics(epoch_ndx, 'trn', trn_metrics_t)
-                val_metrics_t = self.do_validation(epoch_ndx=epoch_ndx, val_dl=val_dl)
-                self.log_metrics(epoch_ndx, 'val', val_metrics_t)
+        logger.info(f"Starting {self.__class__.__name__}, {self.cli_args}")
+        train_dl = self.init_dataloader()
+        val_dl = self.init_dataloader(is_validation=True)
+        for epoch_ndx in range(self.cli_args.epochs + 1):
+            logger.info(f"Starting epoch {epoch_ndx}")
+            trn_metrics_t = self.do_training(epoch_ndx=epoch_ndx, train_dl=train_dl)
+            self.log_metrics(epoch_ndx, 'trn', trn_metrics_t)
+            val_metrics_t = self.do_validation(epoch_ndx=epoch_ndx, val_dl=val_dl)
+            self.log_metrics(epoch_ndx, 'val', val_metrics_t)
 
 if __name__ == '__main__':
     LunaTrainingApp().main()

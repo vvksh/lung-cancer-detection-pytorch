@@ -1,10 +1,10 @@
 import collections
 import datetime
-import logging
+import log
 import time
 import numpy as np
 
-log = logging.getLogger(__name__)
+logger = log.setup_custom_logger(__name__)
 
 IrcTuple = collections.namedtuple('IrcTuple', ['index', 'row', 'col'])
 XyzTuple = collections.namedtuple('XyzTuple', ['x', 'y', 'z'])
@@ -89,7 +89,7 @@ def enumerate_with_estimate(
     while print_ndx < start_ndx * backoff:
         print_ndx *= backoff
 
-    log.warning("{} ----/{}, starting".format(
+    logger.warning("{} ----/{}, starting".format(
         desc_str,
         iter_len,
     ))
@@ -106,7 +106,7 @@ def enumerate_with_estimate(
             done_dt = datetime.datetime.fromtimestamp(start_ts + duration_sec)
             done_td = datetime.timedelta(seconds=duration_sec)
 
-            log.info("{} {:-4}/{}, done at {}, {}".format(
+            logger.info("{} {:-4}/{}, done at {}, {}".format(
                 desc_str,
                 current_ndx,
                 iter_len,
@@ -119,7 +119,7 @@ def enumerate_with_estimate(
         if current_ndx + 1 == start_ndx:
             start_ts = time.time()
 
-    log.warning("{} ----/{}, done at {}".format(
+    logger.warning("{} ----/{}, done at {}".format(
         desc_str,
         iter_len,
         str(datetime.datetime.now()).rsplit('.', 1)[0],
